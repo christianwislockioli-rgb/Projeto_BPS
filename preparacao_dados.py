@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import glob
 import os
 import sys
@@ -8,7 +9,6 @@ print("Iniciando o processamento dos dados do BPS...")
 caminho_dados = 'dados_brutos/*.csv'
 arquivos = glob.glob(caminho_dados)
 
-# TRAVA 1: Verifica se os arquivos realmente existem na pasta
 if not arquivos:
     print("\nERRO CRÍTICO: Nenhum arquivo .csv encontrado na pasta 'dados_brutos/'. Verifique o caminho.")
     sys.exit()
@@ -38,20 +38,28 @@ for arquivo in arquivos:
 print("\nConcatenando as bases de todos os anos...")
 df_consolidado = pd.concat(lista_dataframes, ignore_index=True)
 
-print("Tratando nulos e corrigindo tipos de dados...")
+print("Tratando nulos, 'NULL' literal e corrigindo tipos de dados...")
+
+# CORREÇÃO 1: Substitui a palavra "NULL" por um vazio verdadeiro (NaN)
+df_consolidado.replace('NULL', np.nan, inplace=True)
+df_consolidado.replace('null', np.nan, inplace=True)
+
 colunas_numericas = ['co_pdm', 'co_classe', 'co_grupo', 'co_catmat']
 for col in colunas_numericas:
     if col in df_consolidado.columns:
         df_consolidado[col] = pd.to_numeric(df_consolidado[col], errors='coerce')
 
-# TRAVA 2: Sintaxe atualizada para evitar o Pandas4Warning
+# CORREÇÃO 2: Protege as colunas de data do preenchimento de texto
+colunas_data = ['dt_compra', 'dt_insercao']
 cols_texto = df_consolidado.select_dtypes(include=['object', 'string']).columns
+# Remove as colunas de data da lista de colunas que vão receber "Não Informado"
+cols_texto = [col for col in cols_texto if col not in colunas_data]
+
 df_consolidado[cols_texto] = df_consolidado[cols_texto].fillna('Não Informado')
 
 nome_saida = 'BPS_20_26_ChristianWislocki.csv'
 print(f"Exportando arquivo final: {nome_saida}...")
 
-# TRAVA 3: Previne quebra de código se o arquivo estiver aberto em outro programa
 try:
     df_consolidado.to_csv(nome_saida, sep=';', index=False, encoding='utf-8-sig')
     print(f"\nSucesso absoluto! Base limpa com {df_consolidado.shape[0]} linhas gerada.")
